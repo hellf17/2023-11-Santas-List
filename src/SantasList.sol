@@ -62,6 +62,7 @@ contract SantasList is ERC721, TokenUri {
     error SantasList__NotChristmasYet();
     error SantasList__AlreadyCollected();
     error SantasList__NotNice();
+    error SantasList__notNaughty();
 
     /*//////////////////////////////////////////////////////////////
                                  TYPES
@@ -118,12 +119,13 @@ contract SantasList is ERC721, TokenUri {
      * @param person The person to check
      * @param status The status of the person
      */
-    function checkList(address person, Status status) external {
+    function checkList(address person, Status status) external onlySanta { //added the onlySanta modifier, medium risk, anyone could get the first pass by calling it
         s_theListCheckedOnce[person] = status;
         emit CheckedOnce(person, status);
     }
 
     /* 
+     * Need to edit this to properly only pass if we are nice or extra nice on both checks, right if we are naughty on both checks we are still getting a present 
      * @notice Do a second pass on someone if they are naughty or nice. 
      * Only callable by santa. Only if they pass this are they eligible for a present.
      * 
@@ -132,20 +134,22 @@ contract SantasList is ERC721, TokenUri {
      */
     function checkTwice(address person, Status status) external onlySanta {
         if (s_theListCheckedOnce[person] != status) {
-            revert SantasList__SecondCheckDoesntMatchFirst();
+                revert SantasList__SecondCheckDoesntMatchFirst();
+            }
         }
+              
         s_theListCheckedTwice[person] = status;
         emit CheckedTwice(person, status);
     }
 
-    /*
+    /* Need to edit this so we actually consider the 24h period for enabling the contract
      * @notice Collect your present if you are nice or extra nice. You get extra presents if you are extra nice.
      *  - Nice: Collect an NFT
      *  - Extra Nice: Collect an NFT and a SantaToken
      * This should not be callable until Christmas 2023 (give or take 24 hours), and addresses should not be able to collect more than once.
      */
     function collectPresent() external {
-        if (block.timestamp < CHRISTMAS_2023_BLOCK_TIME) {
+        if (block.timestamp < CHRISTMAS_2023_BLOCK_TIME) { //need to edit to consider 24h period
             revert SantasList__NotChristmasYet();
         }
         if (balanceOf(msg.sender) > 0) {
@@ -166,10 +170,14 @@ contract SantasList is ERC721, TokenUri {
     }
 
     /* 
+     * Need to add the condition to make only naughty people able to call it 
      * @notice Buy a present for someone else. This should only be callable by someone who is naughty.
      * @dev You'll first need to approve the SantasList contract to spend your SantaTokens.
      */
     function buyPresent(address presentReceiver) external {
+        if (s_theListCheckedOnce[msg.sender] != Status.NAUGHTY && s_theListCheckedTwice[msg.sender] != Status.NAUGHTY) {
+            revert SantasList__notNaughty();
+        }
         i_santaToken.burn(presentReceiver);
         _mintAndIncrement();
     }
